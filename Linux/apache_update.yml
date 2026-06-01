@@ -1,0 +1,29 @@
+---
+- name: Install or update Apache web server
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Update apache2 for Debian/Ubuntu
+      ansible.builtin.apt:
+        name: apache2
+        state: latest
+      when: ansible_os_family == "Debian"
+      notify: Restart apache2
+
+    - name: Update httpd for RHEL/CentOS
+      ansible.builtin.yum:
+        name: httpd
+        state: latest
+      when: ansible_os_family == "RedHat"
+      notify: Restart httpd
+
+  handlers:
+    - name: Restart apache2
+      ansible.builtin.service:
+        name: apache2
+        state: restarted
+
+    - name: Restart httpd
+      ansible.builtin.service:
+        name: httpd
+        state: restarted

@@ -1,0 +1,63 @@
+---
+- name: Configure MikroTik Router
+  # Target the group you defined in your inventory file
+  hosts: mikrotik_routers
+  
+  # This is crucial for network devices to prevent errors
+  gather_facts: false
+
+  # This section prompts the user for input before the tasks run.
+  vars_prompt:
+    - name: device_name
+      prompt: "Enter the router device name."
+      private: no
+
+  tasks:
+    - name: 1. Set the router's identity (hostname)
+      community.routeros.command:
+        commands: /system identity set name={{ device_name }}
+
+    - name: 2. Configure DNS servers
+      community.routeros.command:
+        commands: /ip dns set servers=8.8.8.8,1.1.1.1
+
+    - name: 3. Create Bridge0. 
+      community.routeros.bridge:
+        name: Bridge0
+        state: present
+
+    - name: 4. Assign specified ports to "Bridge0".
+      community.routeros.bridge_port:
+        bridge: Bridge0
+        interface: "{{ item }}"
+        state: present
+      loop:
+        - ether2
+        - ether3
+        - ether4
+
+    - name: 5. Create the IP address pool for DHCP
+      # Using a specific module is better than a generic command
+      community.routeros.ip_pool:
+        name: "dhcp_pool-DataNet"
+        ranges: "192.168.10.100-192.168.10.200"
+        state: present
+
+    - name: 6. Create and enable the DHCP server instance
+      community.routeros.dhcp_server:
+        name: "dhcp-data"
+        interface: "Bridge0"  # The interface the DHCP server will listen on
+        address_pool: "dhcp_pool-DataNet" # The pool created in the previous task
+        state: present
+
+    - name: 7. Configure DHCP network settings (gateway, DNS)
+      community.routeros.dhcp_network:
+        address: "192.168.10.0/24" # The network this DHCP server serves
+        gateway: "192.168.10.1"    # The router's IP, which is the gateway for clients
+        dns_server: "8.8.8.8,1.1.1.1"
+        state: present
+
+    - name: 8. Ensure an NTP client is enabled and configured
+      community.routeros.command:
+        commands:
+          - /system ntp client set enabled=yes primary-ntp=216.239.35.12 secondary-ntp=96.44.142.5

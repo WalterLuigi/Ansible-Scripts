@@ -1,0 +1,59 @@
+---
+- name: Create a User Interactively
+  hosts: all
+  become: true
+  
+  # This section prompts the user for input before the tasks run.
+  vars_prompt:
+    - name: new_username
+      prompt: "Enter the username for the new user"
+      private: no
+
+    - name: user_password
+      prompt: "Enter the password for the new user"
+      private: yes  # Hides input for security
+
+    - name: ssh_key_path
+      prompt: "Enter the local path to the user's public SSH key file"
+      private: no
+      default: "~/.ssh/id_rsa.pub"
+
+    - name: add_to_sudo
+      prompt: "Add user to the sudo/admin group? (yes/no)"
+      private: no
+      default: "no"
+
+  tasks:
+    - name: 1. Determine the sudo/admin group for the OS family
+      ansible.builtin.set_fact:
+        sudo_group: "{{ 'wheel' if ansible_os_family == 'RedHat' else 'sudo' }}"
+      
+    - name: 2. Create the user with a securely hashed password
+      ansible.builtin.user:
+        name: "{{ new_username }}"
+        shell: /bin/bash
+        create_home: true
+        # The 'password_hash' filter securely hashes the password before use.
+        password: "{{ user_password | password_hash('sha512') }}"
+        state: present
+      no_log: True # Does not output results to log for security.
+
+    - name: 3. Add user to the sudo/admin group if requested
+      ansible.builtin.user:
+        name: "{{ new_username }}"
+        groups: "{{ sudo_group }}"
+        append: true
+      when: add_to_sudo | lower == 'yes'
+
+    - name: 4. Set up authorized SSH key for the user
+      ansible.posix.authorized_key:
+        user: "{{ new_username }}"
+        state: present
+        # The 'lookup' plugin reads the key file from your local machine.
+        key: "{{ lookup('file', ssh_key_path) }}"
+      # Check if the file exists before trying to read it
+      when: ssh_key_path is not none and ssh_key_path != ''
+
+    - name: 5. Display success message
+      ansible.builtin.debug:
+        msg: "User '{{ new_username }}' has been successfully configured."
