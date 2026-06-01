@@ -1,0 +1,25 @@
+---
+- name: Add SSH public key to root user's authorized_keys
+  hosts: all
+  become: yes  # This allows the playbook to run with root privileges
+  vars:
+    # Define the path to the public key file on your Ansible controller
+    ssh_key_path: "~/.ssh/id_rsa.pub"
+
+  tasks:
+    - name: Ensure the .ssh directory exists for root
+      ansible.builtin.file:
+        path: /root/.ssh
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      # The authorized_key module usually handles directory creation,
+      # but this explicitly ensures correct permissions and ownership.
+
+    - name: Add the public key to root's authorized_keys file
+      ansible.posix.authorized_key:
+        user: root  # Specifies the target user on the remote host
+        state: present
+        key: "{{ lookup('file', ssh_key_path) }}" # Reads the key content from the controller
+        manage_dir: false # Set to false since we manage the directory in a prior task

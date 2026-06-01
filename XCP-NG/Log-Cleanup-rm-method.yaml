@@ -1,0 +1,15 @@
+---
+- name: Clear old log files from /var/log
+  hosts: xcp_prod
+  become: yes # Use 'sudo' or root privileges to clear system logs
+
+  tasks:
+    - name: Cleanup *.gz files
+      shell: "rm -f *.gz"
+      args:
+        chdir: /var/log
+
+    - name: Cleanup *.1 files
+      shell: "rm -f *.1"
+      args:
+        chdir: /var/log

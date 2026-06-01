@@ -1,0 +1,27 @@
+---
+- name: Clear old log files from /var/log
+  hosts: xcp_prod
+  become: yes # Use 'sudo' or root privileges to clear system logs
+
+  vars:
+    log_path: /var/log
+    patterns_to_clear:
+      - "*.1"
+      - "*.gz"
+
+  tasks:
+    - name: Find files matching patterns
+      ansible.builtin.find:
+        paths: "{{ log_path }}"
+        patterns: "{{ patterns_to_clear }}"
+        recurse: yes
+      register: files_to_delete
+
+    - name: Delete found files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ files_to_delete.files }}"
+      when: files_to_delete.files is defined and files_to_delete.files | length > 0
+      # Use a loop over the list of files registered from the find module
+      # The 'when' condition prevents errors if no files are found
