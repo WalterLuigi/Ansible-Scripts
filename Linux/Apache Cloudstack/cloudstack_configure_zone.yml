@@ -1,0 +1,75 @@
+---
+- name: Configure CloudStack Infrastructure (Basic Zone)
+  hosts: localhost
+  connection: local
+  vars:
+    # Get these from the UI (Accounts -> admin -> Users -> admin -> Generate Keys)
+    cs_api_url: "http://192.168.1.50:8080/client/api"
+    cs_api_key: "YOUR_API_KEY"
+    cs_api_secret: "YOUR_SECRET_KEY"
+    
+    zone_name: "Sandbox-Zone"
+    pod_name: "Pod-1"
+    cluster_name: "KVM-Cluster-1"
+
+  tasks:
+    - name: Create a new Zone
+      ngine_io.cloudstack.cs_zone:
+        api_url: "{{ cs_api_url }}"
+        api_key: "{{ cs_api_key }}"
+        api_secret: "{{ cs_api_secret }}"
+        name: "{{ zone_name }}"
+        network_type: Basic
+        dns1: 8.8.8.8
+        internal_dns1: 192.168.1.1
+        state: present
+
+    - name: Create a Pod within the Zone
+      ngine_io.cloudstack.cs_pod:
+        api_url: "{{ cs_api_url }}"
+        api_key: "{{ cs_api_key }}"
+        api_secret: "{{ cs_api_secret }}"
+        name: "{{ pod_name }}"
+        zone: "{{ zone_name }}"
+        gateway: 192.168.1.1
+        netmask: 255.255.255.0
+        start_ip: 192.168.1.100
+        end_ip: 192.168.1.150
+        state: present
+
+    - name: Create a Cluster for KVM
+      ngine_io.cloudstack.cs_cluster:
+        api_url: "{{ cs_api_url }}"
+        api_key: "{{ cs_api_key }}"
+        api_secret: "{{ cs_api_secret }}"
+        name: "{{ cluster_name }}"
+        zone: "{{ zone_name }}"
+        pod: "{{ pod_name }}"
+        hypervisor: KVM
+        cluster_type: CloudManaged
+        state: present
+
+    - name: Add KVM Host to the Cluster
+      ngine_io.cloudstack.cs_host:
+        api_url: "{{ cs_api_url }}"
+        api_key: "{{ cs_api_key }}"
+        api_secret: "{{ cs_api_secret }}"
+        name: "kvm-host-01"
+        url: "http://192.168.1.51"
+        zone: "{{ zone_name }}"
+        pod: "{{ pod_name }}"
+        cluster: "{{ cluster_name }}"
+        hypervisor: KVM
+        state: present
+
+    - name: Add Primary Storage (NFS example)
+      ngine_io.cloudstack.cs_storage_pool:
+        api_url: "{{ cs_api_url }}"
+        api_key: "{{ cs_api_key }}"
+        api_secret: "{{ cs_api_secret }}"
+        name: "Primary-NFS"
+        zone: "{{ zone_name }}"
+        pod: "{{ pod_name }}"
+        cluster: "{{ cluster_name }}"
+        url: "nfs://192.168.1.10/export/primary"
+        state: present

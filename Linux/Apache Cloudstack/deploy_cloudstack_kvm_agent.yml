@@ -1,0 +1,53 @@
+- name: Deploy CloudStack KVM Agent on Ubuntu 22.04
+  hosts: cloudstack_agent
+  become: yes
+  vars:
+    cs_version: "4.19"
+
+  tasks:
+    - name: Install Bridge Utilities
+      apt:
+        name: [bridge-utils, qemu-kvm, libvirt-daemon-system, libvirt-clients]
+        state: present
+
+    - name: Configure CloudStack APT Repo (Agent)
+      apt_repository:
+        repo: "deb http://download.cloudstack.org/ubuntu jammy {{ cs_version }} main"
+        state: present
+
+    - name: Install CloudStack Agent
+      apt:
+        name: cloudstack-agent
+        state: present
+        update_cache: yes
+
+    - name: Configure Libvirt to listen for CloudStack
+      lineinfile:
+        path: /etc/libvirt/libvirtd.conf
+        regexp: "{{ item.regex }}"
+        line: "{{ item.line }}"
+      loop:
+        - { regex: '^#listen_tls =', line: 'listen_tls = 0' }
+        - { regex: '^#listen_tcp =', line: 'listen_tcp = 1' }
+        - { regex: '^#tcp_port =', line: 'tcp_port = "16509"' }
+        - { regex: '^#auth_tcp =', line: 'auth_tcp = "none"' }
+      notify: Restart Libvirt
+
+    - name: Modify Libvirt default config
+      lineinfile:
+        path: /etc/default/libvirtd
+        regexp: '^#libvirtd_opts='
+        line: 'libvirtd_opts="-l"'
+      notify: Restart Libvirt
+
+    - name: Disable AppArmor for Libvirt (Required for CloudStack)
+      shell: |
+        ln -s /etc/apparmor.d/usr.sbin.libvirtd /etc/apparmor.d/disable/
+        apparmor_parser -R /etc/apparmor.d/usr.sbin.libvirtd
+      ignore_errors: yes
+
+  handlers:
+    - name: Restart Libvirt
+      service:
+        name: libvirtd
+        state: restarted

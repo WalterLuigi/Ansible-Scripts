@@ -1,0 +1,82 @@
+---
+- name: Deploy Apache CloudStack Management Server on Ubuntu 22.04
+  hosts: cloudstack_management
+  become: yes
+  vars:
+    cs_version: "4.19"
+    db_root_pass: "CloudStack123!"
+    db_user_pass: "cloudpass"
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install prerequisite packages
+      apt:
+        name:
+          - gnupg2
+          - wget
+          - python3-mysql.connector
+          - mysql-server
+          - chrony
+        state: present
+
+    - name: Configure MySQL for CloudStack
+      blockinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        block: |
+          innodb_rollback_on_timeout=1
+          innodb_lock_wait_timeout=600
+          max_connections=350
+          log_bin=mysql-bin
+          binlog_format=ROW
+          server_id=1
+      notify: Restart MySQL
+
+    - name: Ensure MySQL is started
+      service:
+        name: mysql
+        state: started
+        enabled: yes
+
+    - name: Add CloudStack APT Key
+      apt_key:
+        url: https://download.cloudstack.org/release.asc
+        state: present
+
+    - name: Add CloudStack Repository
+      apt_repository:
+        repo: "deb http://download.cloudstack.org/ubuntu jammy {{ cs_version }} main"
+        state: present
+        filename: cloudstack
+
+    - name: Install CloudStack Management Server
+      apt:
+        name: cloudstack-management
+        state: present
+        update_cache: yes
+
+    - name: Initialize CloudStack Database
+      shell: >
+        cloudstack-setup-databases cloud:{{ db_user_pass }}@localhost
+        --deploy-as=root:{{ db_root_pass }}
+      args:
+        creates: /var/lib/cloudstack/management/setup/db.properties
+
+    - name: Setup CloudStack Management Configuration
+      command: cloudstack-setup-management
+      args:
+        creates: /etc/cloudstack/management/key
+
+    - name: Enable and Start CloudStack Management
+      service:
+        name: cloudstack-management
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Restart MySQL
+      service:
+        name: mysql
+        state: restarted
